@@ -1,0 +1,1072 @@
+
+//Last&Final Project
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+#define MAX_COURSES 10
+#define MAX_NAME_LENGTH 100
+#define MAX_COURSE_CODE_LENGTH 10
+#define USER_TYPE "user1"
+#define MAX_PASSWORD_ATTEMPTS 5
+
+
+#define GREEN "\033[32m"
+#define RED "\033[31m"
+#define YELLOW "\033[33m"
+#define BLUE "\033[34m"
+#define MAGENTA "\033[35m"
+#define CYAN "\033[36m"
+#define RESET "\033[0m"
+
+struct CourseMarks {
+    char courseCode[MAX_COURSE_CODE_LENGTH];
+    char courseType[5];
+    float creditHours;
+
+    float quiz1, quiz2, quiz3;
+    float quizAvg;
+    float midterm;
+    float finalterm;
+    float presentation;
+    float assignment;
+    float attendance;
+
+    float labEval1;
+    float labEval2;
+    float labEvalAvg;
+    float labFinal;
+    float labProject;
+    float labAttendance;
+
+    float totalMarks;
+    char letterGrade[3];
+    float gpa;
+};
+
+struct Student {
+    int id1, id2, id3;
+    char name[MAX_NAME_LENGTH];
+    struct CourseMarks courses[MAX_COURSES];
+    int courseCount;
+    struct Student* next;
+};
+
+
+void loadDataFromFile(struct Student** head, const char* filename);
+void saveDataToFile(struct Student* head, const char* filename);
+void addNewData(struct Student** head, const char* filename);
+void viewAllData(struct Student* head);
+void viewIndividualData(struct Student* head);
+void editStudent(struct Student* head, const char* filename);
+struct Student* searchStudentByFullID(struct Student* head, const char* searchID);
+struct Student* searchStudentByLast3(struct Student* head, const char* last3);
+void addCourseToStudent(struct Student* student);
+void enterCourseMarks(struct CourseMarks* course);
+void editCourseMarks(struct CourseMarks* course);
+void calculateQuizAvg(struct CourseMarks* course);
+void calculateGrade(struct CourseMarks* course);
+float calculateSGPA(struct Student* student);
+int validateCourseCode(const char* code);
+void toUpperCase(char* str);
+void clearInputBuffer(void);
+void displayMenu(void);
+
+void freeStudentList(struct Student* head) {
+    struct Student* current = head;
+    while (current != NULL) {
+        struct Student* next = current->next;
+        free(current);
+        current = next;
+    }
+}
+
+int validateSectionName(const char* section) {
+    int len = strlen(section);
+    if (len < 3 || len > 10) return 0;
+
+    for (int i = 0; i < len; i++) {
+        if (!isalnum(section[i]) && section[i] != '_' && section[i] != '-') return 0;
+    }
+    return 1;
+}
+
+void displayTeacherMenu() {
+    printf("\n    %s***************************************************%s\n", CYAN, RESET);
+    printf("    %s*           TEACHER CONTROL PANEL                 *%s\n", CYAN, RESET);
+    printf("    %s***************************************************%s\n", CYAN, RESET);
+    printf("    %s1.%s Student Marks Portal\n", YELLOW, RESET);
+    printf("    %s2.%s View All Students Marks\n", YELLOW, RESET);
+    printf("    %s3.%s View Individual Student Marks\n", YELLOW, RESET);
+    printf("    %s4.%s Edit Student Marks\n", YELLOW, RESET);
+    printf("    %s5.%s Delete Student Data (Full Remove)\n", YELLOW, RESET);
+    printf("    %s6.%s Delete Single Course\n", YELLOW, RESET);
+    printf("    %s7.%s Logout\n", YELLOW, RESET);
+    printf("    %s***************************************************%s\n", CYAN, RESET);
+}
+
+void displayStudentMenu() {
+    printf("\n    %s***************************************************%s\n", CYAN, RESET);
+     printf("    %s*                STUDENT PORTAL                   *%s\n", CYAN, RESET);
+    printf("    %s***************************************************%s\n", CYAN, RESET);
+    printf("    %s1.%s View Individual Result\n", YELLOW, RESET);
+    printf("    %s2.%s Exit\n", YELLOW, RESET);
+    printf("    %s***************************************************%s\n", CYAN, RESET);
+}
+
+int verifyTeacherPassword() {
+    char password[50];
+    int attempts = 0;
+
+    while (attempts < MAX_PASSWORD_ATTEMPTS) {
+        printf("\nEnter teacher password (attempt %d/%d): ", attempts + 1, MAX_PASSWORD_ATTEMPTS);
+        scanf("%49s", password);
+        clearInputBuffer();
+
+        if (strcmp(password, USER_TYPE) == 0) {
+            printf("\n%sLogin successful! Welcome to Teacher Control Panel.%s\n", GREEN, RESET);
+            return 1;
+        }
+
+        printf("Incorrect password. Please try again.\n");
+        attempts++;
+    }
+
+    printf("\nMaximum login attempts reached. Access denied.\n");
+    return 0;
+}
+
+#define RESET   "\033[0m"
+#define RED     "\033[31m"
+#define GREEN   "\033[32m"
+#define YELLOW  "\033[33m"
+#define BLUE    "\033[34m"
+#define MAGENTA "\033[35m"
+#define CYAN    "\033[36m"
+
+void displayMainMenu() {
+    printf("\n    %s***************************************************%s\n", MAGENTA, RESET);
+    printf("    %s*              ****  %s *** %s  *    *%s                %s*%s\n", BLUE, RESET,GREEN,RESET,BLUE,RESET);
+    printf("    %s*              *   *  %s *  %s  *    *  %s              %s*%s\n", BLUE, RESET, GREEN,RESET,BLUE,RESET);
+    printf("    %s*              *   *  %s *  %s  *    *    %s            %s*%s\n", BLUE, RESET, GREEN,RESET,BLUE,RESET);
+    printf("    %s*              *   *  %s *  %s  *    *      %s          %s*%s\n", BLUE, RESET, GREEN,RESET,BLUE,RESET);
+    printf("    %s*              ****   %s*** %s  ******        %s        %s*%s\n", BLUE, RESET, GREEN,RESET,BLUE,RESET);
+    printf("    %s***************************************************%s\n", MAGENTA, RESET);
+    printf("    %s*      Student Mark & Result Management           *%s\n", YELLOW, RESET);
+    printf("    %s***************************************************%s\n", BLUE, RESET);
+    printf("    %s1. Teacher Login%s\n", CYAN, RESET);
+    printf("    %s2. Student Portal%s\n", CYAN, RESET);
+    printf("    %s3. Exit%s\n", CYAN, RESET);
+    printf("    %s***************************************************%s\n", BLUE, RESET);
+}
+
+void displayStudentHeader(const struct Student* student) {
+    printf("\n    %s+================================================+%s\n", GREEN, RESET);
+    printf("    %s|              STUDENT INFORMATION               |%s\n", GREEN, RESET);
+    printf("    %s+================================================+%s\n", GREEN, RESET);
+    printf("    %s|  ID   : %s%03d-%02d-%03d%s                             |%s\n", GREEN, YELLOW, student->id1, student->id2, student->id3, GREEN, RESET);
+    printf("    %s|  NAME : %s%-39s%s|%s\n", GREEN, YELLOW, student->name, GREEN, RESET);
+    printf("    %s+================================================+%s\n", GREEN, RESET);
+}
+
+void displayCourseMarksTable(const struct CourseMarks* course) {
+    printf("\n    %s#Course: %s%s (%s)%s\n", MAGENTA, CYAN, course->courseCode, course->courseType, RESET);
+    printf("    %s+----------------------------------------------------------------------------------------------------------------+%s\n", MAGENTA, RESET);
+
+    if (strcmp(course->courseType, "THY") == 0) {
+        printf("    %s| Quiz 1     Quiz 2     Quiz 3   Q Avg   Mid Xm    Final Xm   Presentation   Assignment   Attendance  Total      |%s\n", MAGENTA, RESET);
+        printf("%s    |                                                                                                                |%s\n", MAGENTA, RESET);
+        printf("    %s| %s%-10.1f %-10.1f %-8.1f %-7.1f %-9.1f %-10.1f %-14.1f %-12.1f %-11.1f %-2.1f %s      |%s\n",
+               MAGENTA, CYAN,
+               course->quiz1, course->quiz2, course->quiz3, course->quizAvg,
+               course->midterm, course->finalterm, course->presentation,
+               course->assignment, course->attendance, course->totalMarks,
+               MAGENTA, RESET);
+        printf("%s    |                                                                                                                |%s\n", MAGENTA, RESET);
+    } else{
+        printf("    %s| Lab Evaluation 1   Lab Evaluation 2   Lab Avg   Lab Final   Project     Attendance   Total                     |%s\n", MAGENTA, RESET);
+        printf("%s    |                                                                                                                |%s\n", MAGENTA, RESET);
+        printf("    %s| %s%-18.1f %-18.1f %-9.1f %-11.1f %-11.1f %-12.1f %-8.1f                  %s|%s\n",
+               MAGENTA, CYAN,
+               course->labEval1, course->labEval2, course->labEvalAvg,
+               course->labFinal, course->labProject, course->labAttendance,
+               course->totalMarks,
+               MAGENTA, RESET);
+        printf("%s    |                                                                                                                |%s\n", MAGENTA, RESET);
+    }
+
+       printf("    %s+----------------------------------------------------------------------------------------------------------------+%s\n", MAGENTA, RESET);
+    printf("    %s| Grade: %s%-4s%s    GPA: %s%-6.2f%s    Credit Hours: %s%-6.2f%s                                                             |%s\n",
+           MAGENTA,
+           (strcmp(course->letterGrade, "F") == 0) ? RED : YELLOW,
+           course->letterGrade, MAGENTA, YELLOW, course->gpa, MAGENTA, YELLOW, course->creditHours, MAGENTA, RESET);
+       printf("    %s+----------------------------------------------------------------------------------------------------------------+%s\n", MAGENTA, RESET);
+
+    if (strcmp(course->letterGrade, "F") == 0) {
+        printf("\n    %sUnfortunately, This student have failed in this course.%s\n", RED, RESET);
+    }
+}
+
+float getValidMark(const char* assessment, float maxMark) {
+    float mark;
+    do {
+        printf("%s (max %.1f): ", assessment, maxMark);
+        scanf("%f", &mark);
+        clearInputBuffer();
+        if (mark < 0 || mark > maxMark) {
+            printf(RED "Invalid mark! Please enter a value between 0 and %.1f" RESET "\n", maxMark);
+        }
+    } while (mark < 0 || mark > maxMark);
+    return mark;
+}
+
+void enterCourseMarks(struct CourseMarks* course) {
+    printf("\n%s+------------------------------------+%s\n",MAGENTA,RESET);
+    printf("%s|%s         %sCOURSE MARK ENTRY%s          %s|%s\n",MAGENTA,RESET,GREEN,RESET, MAGENTA,RESET);
+    printf("%s+------------------------------------+%s\n\n",MAGENTA,RESET);
+
+    do {
+        printf("Enter Course Code (e.g., CSE123): ");
+        scanf("%9s", course->courseCode);
+        toUpperCase(course->courseCode);
+    } while (!validateCourseCode(course->courseCode));
+
+    printf("\nIs this a Theory or Lab course? (T/L): ");
+    char type;
+    scanf(" %c", &type);
+    clearInputBuffer();
+    strcpy(course->courseType, (toupper(type) == 'L') ? "LAB" : "THY");
+
+    printf("Enter Credit Hours for %s: ", course->courseCode);
+    scanf("%f", &course->creditHours);
+    clearInputBuffer();
+
+    printf("\nEntering marks for %s (%s):\n", course->courseCode, course->courseType);
+    printf("-------------------------------------\n");
+
+    if (strcmp(course->courseType, "THY") == 0) {
+
+        course->quiz1 = getValidMark("Quiz 1", 15.0);
+        course->quiz2 = getValidMark("Quiz 2", 15.0);
+        course->quiz3 = getValidMark("Quiz 3", 15.0);
+        calculateQuizAvg(course);
+        printf("\nQuiz Average: %.2f\n", course->quizAvg);
+        printf("-------------------------------------\n");
+
+        course->midterm = getValidMark("Midterm", 25.0);
+        course->finalterm = getValidMark("Final Term", 40.0);
+        course->presentation = getValidMark("Presentation", 8.0);
+        course->assignment = getValidMark("Assignment", 5.0);
+        course->attendance = getValidMark("Attendance", 7.0);
+
+
+        course->labEval1 = 0;
+        course->labEval2 = 0;
+        course->labEvalAvg = 0;
+        course->labFinal = 0;
+        course->labProject = 0;
+        course->labAttendance = 0;
+    } else {
+
+        course->labEval1 = getValidMark("Lab Evaluation 1", 25.0);
+        course->labEval2 = getValidMark("Lab Evaluation 2", 25.0);
+        course->labEvalAvg = (course->labEval1 + course->labEval2) / 2.0;
+        course->labFinal = getValidMark("Lab Final", 40.0);
+        course->labProject = getValidMark("Lab Project", 25.0);
+        course->labAttendance = getValidMark("Lab Attendance", 10.0);
+
+
+        course->quiz1 = 0;
+        course->quiz2 = 0;
+        course->quiz3 = 0;
+        course->quizAvg = 0;
+        course->midterm = 0;
+        course->finalterm = 0;
+        course->presentation = 0;
+        course->assignment = 0;
+        course->attendance = 0;
+    }
+
+
+    calculateGrade(course);
+
+    printf("\n-------------------------------------\n");
+    printf(GREEN "Course marks entered successfully!" RESET "\n");
+    printf("Total Marks: %.2f\n", course->totalMarks);
+    if(course->totalMarks<40){
+        printf("Letter Grade: %sF%s\n", RED,RESET);
+    }else{
+    printf("Letter Grade: %s\n", course->letterGrade);
+    }
+    if(course->totalMarks<40){
+        printf("GPA: %s0.00%s\n", RED,RESET);
+        printf("%sThis student have failed in this course.%s\n", RED,RESET);
+    }else{
+    printf("GPA: %.2f\n", course->gpa);
+    printf("%sThis student have passed in this course.%s\n", GREEN,RESET);
+    }
+    clearInputBuffer();
+}
+
+void displaySummaryTable(struct Student* head) {
+    if (!head) return;
+
+
+    int count = 0;
+    struct Student* current = head;
+    while (current) {
+        count++;
+        current = current->next;
+    }
+
+
+    struct Student** students = malloc(count * sizeof(struct Student*));
+    if (!students) return;
+
+
+    current = head;
+    float* sgpas = malloc(count * sizeof(float));
+    if (!sgpas) {
+        free(students);
+        return;
+    }
+
+    for (int i = 0; i < count; i++) {
+        students[i] = current;
+        sgpas[i] = calculateSGPA(current);
+        current = current->next;
+    }
+
+
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = 0; j < count - i - 1; j++) {
+            if (sgpas[j] < sgpas[j + 1]) {
+
+                struct Student* temp = students[j];
+                students[j] = students[j + 1];
+                students[j + 1] = temp;
+
+                float tempSgpa = sgpas[j];
+                sgpas[j] = sgpas[j + 1];
+                sgpas[j + 1] = tempSgpa;
+            }
+        }
+    }
+
+
+    printf("\n   %s +===========================================================================+%s\n",MAGENTA,RESET);
+    printf("   %s |%s                           %sSTUDENT SUMMARY TABLE%s                           %s|%s\n",MAGENTA,RESET,YELLOW,RESET,MAGENTA,RESET);
+    printf("    %s+===========================================================================+%s\n",MAGENTA,RESET);
+    printf("    %s|%s %s%-40s%s %s|%s %s%-12s%s %s|%s %s%-10s%s      %s|%s\n",MAGENTA,RESET, GREEN, "Student Name",RESET, MAGENTA,RESET, GREEN, "Student ID", RESET, MAGENTA,RESET, GREEN, "SGPA",RESET, MAGENTA,RESET);
+    printf("    %s+---------------------------------------------------------------------------+%s\n",MAGENTA,RESET);
+
+
+    for (int i = 0; i < count; i++) {
+        char fullID[15];
+        sprintf(fullID, "%03d-%02d-%03d", students[i]->id1, students[i]->id2, students[i]->id3);
+        float sgpa = calculateSGPA(students[i]);
+        printf("    %s|%s %s%-40s%s %s|%s %s%-12s%s %s|%s %s%-10.2f%s      %s|%s\n",
+               MAGENTA,RESET,CYAN, students[i]->name,RESET,MAGENTA,RESET, CYAN, fullID,RESET,MAGENTA,RESET, CYAN, sgpa,RESET,MAGENTA,RESET);
+    }
+    printf("    %s+===========================================================================+%s\n\n",MAGENTA,RESET);
+
+    free(students);
+}
+
+void viewAllData(struct Student* head) {
+    if (!head) {
+        printf("\n" RED "No student data found." RESET "\n");
+        return;
+    }
+
+
+    struct Student* current = head;
+    while (current) {
+        displayStudentHeader(current);
+
+        for (int i = 0; i < current->courseCount; i++) {
+            displayCourseMarksTable(&current->courses[i]);
+        }
+
+        float sgpa = calculateSGPA(current);
+        printf("\n    %s+----------------------------------------------------------------------------------------------------------------+%s\n",MAGENTA,RESET);
+        printf("    %s|%s %sSemester GPA (SGPA):%s %s%-6.2f%s                                                                                    %s|%s\n", MAGENTA,RESET,GREEN,RESET,YELLOW,sgpa,RESET,MAGENTA,RESET);
+        printf("    %s+----------------------------------------------------------------------------------------------------------------+%s\n",MAGENTA,RESET);
+        printf("\n%s    ==================================================================================================================%s\n",GREEN,RESET);
+        current = current->next;
+    }
+
+
+    printf("\n    %sSUMMARY TABLE (Sorted by SGPA):%s\n",YELLOW,RESET);
+    displaySummaryTable(head);
+}
+
+void viewIndividualData(struct Student* head) {
+    if (!head) {
+        printf("\n" RED "No student data available." RESET "\n");
+        return;
+    }
+
+    printf("\nSearch by:\n");
+    printf("1. Full ID (242-15-XXX)\n");
+    printf("2. Last 3 digits of ID\n");
+    printf("\n%sEnter your choice:%s ",CYAN,RESET);
+
+    int choice;
+    scanf("%d", &choice);
+    clearInputBuffer();
+
+    struct Student* student = NULL;
+    char searchInput[20];
+
+    if (choice == 1) {
+        printf("Enter Full Student ID (242-15-XXX): ");
+        scanf("%19s", searchInput);
+        student = searchStudentByFullID(head, searchInput);
+    } else if (choice == 2) {
+        printf("Enter Last 3 digits of ID: ");
+        scanf("%3s", searchInput);
+        student = searchStudentByLast3(head, searchInput);
+    } else {
+        printf(RED "Invalid choice." RESET "\n");
+        return;
+    }
+
+    if (student) {
+        displayStudentHeader(student);
+        for (int i = 0; i < student->courseCount; i++) {
+            displayCourseMarksTable(&student->courses[i]);
+            printf("\n");
+        }
+
+        float sgpa = calculateSGPA(student);
+        printf("\n    %s+----------------------------------------------------------------------------------------------------------------+%s\n",MAGENTA,RESET);
+        printf("    %s|%s %sSemester GPA (SGPA):%s %s%-6.2f%s                                                                                    %s|%s\n", MAGENTA,RESET,GREEN,RESET,YELLOW,sgpa,RESET,MAGENTA,RESET);
+        printf("    %s+----------------------------------------------------------------------------------------------------------------+%s\n",MAGENTA,RESET);
+        printf("\n%s    ==================================================================================================================%s\n",GREEN,RESET);
+    } else {
+        printf("\n%sStudent not found.%s\n",RED,RESET);
+    }
+}
+
+struct Student* searchStudentByFullID(struct Student* head, const char* searchID) {
+    struct Student* current = head;
+    while (current) {
+        char fullID[20];
+        sprintf(fullID, "%03d-%02d-%03d", current->id1, current->id2, current->id3);
+        if (strcmp(fullID, searchID) == 0) {
+            return current;
+        }
+        current = current->next;
+    }
+    return NULL;
+}
+
+struct Student* searchStudentByLast3(struct Student* head, const char* last3) {
+    struct Student* current = head;
+    while (current) {
+        char last3Digits[4];
+        sprintf(last3Digits, "%03d", current->id3);
+        if (strcmp(last3Digits, last3) == 0) {
+            return current;
+        }
+        current = current->next;
+    }
+    return NULL;
+}
+
+void deleteStudent(struct Student** head, const char* filename) {
+    printf("\nEnter Student ID to delete (242-15-XXX): ");
+    char searchID[20];
+    scanf("%19s", searchID);
+    clearInputBuffer();
+
+    struct Student* current = *head;
+    struct Student* prev = NULL;
+
+    while (current != NULL) {
+        char currentID[20];
+        sprintf(currentID, "%03d-%02d-%03d", current->id1, current->id2, current->id3);
+        if (strcmp(currentID, searchID) == 0) {
+            printf("\nStudent found: %s\n", current->name);
+            printf("Are you sure you want to delete this student? (Y/N): ");
+            char confirm;
+            scanf(" %c", &confirm);
+            clearInputBuffer();
+
+            if (toupper(confirm) == 'Y') {
+                if (prev == NULL) {
+                    *head = current->next;
+                } else {
+                    prev->next = current->next;
+                }
+                free(current);
+                saveDataToFile(*head, filename);
+                printf("Student deleted successfully!\n");
+            } else {
+                printf(YELLOW "Deletion canceled." RESET "\n");
+            }
+            return;
+        }
+        prev = current;
+        current = current->next;
+    }
+    printf(RED "Student not found!" RESET "\n");
+}
+
+void deleteCourse(struct Student* head, const char* filename) {
+    printf("\nEnter Student ID (242-15-XXX): ");
+    char searchID[20];
+    scanf("%19s", searchID);
+    clearInputBuffer();
+
+    struct Student* student = searchStudentByFullID(head, searchID);
+    if (!student) {
+        printf(RED "Student not found!" RESET "\n");
+        return;
+    }
+
+    if (student->courseCount == 0) {
+        printf("No courses available for this student.\n");
+        return;
+    }
+
+    printf("\nAvailable courses:\n");
+    for (int i = 0; i < student->courseCount; i++) {
+        printf("%d. %s\n", i+1, student->courses[i].courseCode);
+    }
+
+    int courseIndex;
+    printf("Enter course number to delete (1-%d): ", student->courseCount);
+    scanf("%d", &courseIndex);
+    clearInputBuffer();
+
+    if (courseIndex < 1 || courseIndex > student->courseCount) {
+        printf("Invalid course number!\n");
+        return;
+    }
+
+    printf("Are you sure you want to delete course %s? (Y/N): ",
+           student->courses[courseIndex-1].courseCode);
+    char confirm;
+    scanf(" %c", &confirm);
+    clearInputBuffer();
+
+    if (toupper(confirm) == 'Y') {
+        for (int i = courseIndex-1; i < student->courseCount-1; i++) {
+            student->courses[i] = student->courses[i+1];
+        }
+        student->courseCount--;
+        saveDataToFile(head, filename);
+        printf("Course deleted successfully!\n");
+    } else {
+        printf(YELLOW "Deletion canceled." RESET "\n");
+    }
+}
+
+void editStudent(struct Student* head, const char* filename) {
+    printf("\nEnter Student ID to edit (242-15-XXX): ");
+    char searchID[20];
+    scanf("%19s", searchID);
+    clearInputBuffer();
+
+    struct Student* student = searchStudentByFullID(head, searchID);
+    if (!student) {
+        printf(RED "Student not found!" RESET "\n");
+        return;
+    }
+
+    int choice;
+    while (1) {
+        printf("\nEDIT STUDENT RECORD\n");
+        printf("1. Edit Name\n");
+        printf("2. Edit Course Marks\n");
+        printf("3. Add New Course\n");
+        printf("4. Return to Main Menu\n");
+        printf("%sEnter your choice:%s ",CYAN,RESET);
+        scanf("%d", &choice);
+        clearInputBuffer();
+
+        if (choice == 4) {
+            saveDataToFile(head, filename);
+            printf(GREEN "Changes saved." RESET "\n");
+            return;
+        }
+
+        switch (choice) {
+            case 1: {
+                printf("Enter new name (current: %s): ", student->name);
+                fgets(student->name, MAX_NAME_LENGTH, stdin);
+                student->name[strcspn(student->name, "\n")] = '\0';
+                break;
+            }
+            case 2: {
+                if (student->courseCount == 0) {
+                    printf("No courses available for this student.\n");
+                    break;
+                }
+
+                printf("\nAvailable courses:\n");
+                for (int i = 0; i < student->courseCount; i++) {
+                    printf("%d. %s\n", i+1, student->courses[i].courseCode);
+                }
+
+                int courseChoice;
+                printf("Select course to edit: ");
+                scanf("%d", &courseChoice);
+                clearInputBuffer();
+
+                if (courseChoice < 1 || courseChoice > student->courseCount) {
+                    printf("Invalid selection.\n");
+                    break;
+                }
+
+                editCourseMarks(&student->courses[courseChoice-1]);
+                break;
+            }
+            case 3: {
+                if (student->courseCount >= MAX_COURSES) {
+                    printf("Maximum number of courses reached.\n");
+                    break;
+                }
+                addCourseToStudent(student);
+                student->courseCount++;
+                break;
+            }
+            default:
+                printf("Invalid choice! Try again.\n");
+        }
+    }
+}
+
+void editCourseMarks(struct CourseMarks* course) {
+    int choice;
+    while (1) {
+        printf("\nEDIT COURSE MARKS\n");
+        printf("1. Quiz 1 (current: %.2f)\n", course->quiz1);
+        printf("2. Quiz 2 (current: %.2f)\n", course->quiz2);
+        printf("3. Quiz 3 (current: %.2f)\n", course->quiz3);
+        printf("4. Lab Evaluation 1 (current: %.2f)\n", course->labEval1);
+        printf("5. Midterm (current: %.2f)\n", course->midterm);
+        printf("6. Final Term (current: %.2f)\n", course->finalterm);
+        printf("7. Lab Final (current: %.2f)\n", course->labFinal);
+        printf("8. Assignment (current: %.2f)\n", course->assignment);
+        printf("9. Presentation (current: %.2f)\n", course->presentation);
+        printf("10. Return to Previous Menu\n");
+        printf("\n%sEnter your choice:%s ",CYAN,RESET);
+        scanf("%d", &choice);
+
+        if (choice == 10) break;
+
+        float newMark;
+        printf("Enter new mark: ");
+        scanf("%f", &newMark);
+
+        switch (choice) {
+            case 1:
+                course->quiz1 = newMark;
+                calculateQuizAvg(course);
+                break;
+            case 2:
+                course->quiz2 = newMark;
+                calculateQuizAvg(course);
+                break;
+            case 3:
+                course->quiz3 = newMark;
+                calculateQuizAvg(course);
+                break;
+            case 4:
+                course->labEval1 = newMark;
+                course->labEvalAvg = (course->labEval1 + course->labEval2) / 2.0;
+                break;
+            case 5:
+                course->midterm = newMark;
+                break;
+            case 6:
+                course->finalterm = newMark;
+                break;
+            case 7:
+                course->labFinal = newMark;
+                break;
+            case 8:
+                course->assignment = newMark;
+                break;
+            case 9:
+                course->presentation = newMark;
+                break;
+            default:
+                printf("Invalid choice!\n");
+        }
+        clearInputBuffer();
+
+
+        calculateGrade(course);
+        printf("\n%sMarks updated successfully!%s\n", GREEN, RESET);
+        printf("New Total Marks: %.2f\n", course->totalMarks);
+        printf("New Grade: %s\n", course->letterGrade);
+        printf("New GPA: %.2f\n", course->gpa);
+    }
+}
+
+int validateCourseCode(const char* code) {
+    if (strlen(code) < 6 || strlen(code) > 7) {
+        printf("Invalid course code length. Must be 6-7 characters (e.g., CSE123).\n");
+        return 0;
+    }
+
+    for (int i = 0; i < 3; i++) {
+        if (!isalpha(code[i])) {
+            printf("First 3 characters must be letters (e.g., CSE).\n");
+            return 0;
+        }
+    }
+
+    for (int i = 3; i < strlen(code); i++) {
+        if (!isdigit(code[i])) {
+            printf("Last characters must be numbers (e.g., 123).\n");
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+void toUpperCase(char* str) {
+    for (int i = 0; str[i]; i++) {
+        str[i] = toupper(str[i]);
+    }
+}
+
+void clearInputBuffer() {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF);
+}
+
+
+void calculateQuizAvg(struct CourseMarks* course) {
+    course->quizAvg = (course->quiz1 + course->quiz2 + course->quiz3) / 3.0;
+}
+
+void calculateGrade(struct CourseMarks* course) {
+
+    if (strcmp(course->courseType, "THY") == 0) {
+        course->totalMarks = course->quizAvg + course->midterm + course->finalterm +
+                             course->presentation + course->assignment + course->attendance;
+    } else {
+        course->totalMarks = course->labEvalAvg + course->labFinal + course->labProject + course->labAttendance;
+    }
+
+
+    if (course->totalMarks >= 80) {
+        strcpy(course->letterGrade, "A+");
+        course->gpa = 4.00;
+    } else if (course->totalMarks >= 75) {
+        strcpy(course->letterGrade, "A");
+        course->gpa = 3.75;
+    } else if (course->totalMarks >= 70) {
+        strcpy(course->letterGrade, "A-");
+        course->gpa = 3.50;
+    } else if (course->totalMarks >= 65) {
+        strcpy(course->letterGrade, "B+");
+        course->gpa = 3.25;
+    } else if (course->totalMarks >= 60) {
+        strcpy(course->letterGrade, "B");
+        course->gpa = 3.00;
+    } else if (course->totalMarks >= 55) {
+        strcpy(course->letterGrade, "B-");
+        course->gpa = 2.75;
+    } else if (course->totalMarks >= 50) {
+        strcpy(course->letterGrade, "C+");
+        course->gpa = 2.50;
+    } else if (course->totalMarks >= 45) {
+        strcpy(course->letterGrade, "C");
+        course->gpa = 2.25;
+    } else if (course->totalMarks >= 40) {
+        strcpy(course->letterGrade, "D");
+        course->gpa = 2.00;
+    } else {
+        strcpy(course->letterGrade, "F");
+        course->gpa = 0.00;
+    }
+}
+
+float calculateSGPA(struct Student* student) {
+    if (student->courseCount == 0) return 0.0;
+
+    float totalGPAPoints = 0.0;
+    float totalCreditHours = 0.0;
+
+    for (int i = 0; i < student->courseCount; i++) {
+        totalGPAPoints += student->courses[i].gpa * student->courses[i].creditHours;
+        totalCreditHours += student->courses[i].creditHours;
+    }
+
+    return totalGPAPoints / totalCreditHours;
+}
+
+
+void saveDataToFile(struct Student* head, const char* filename) {
+    FILE* file = fopen(filename, "wb");
+    if (!file) {
+        printf("Error opening file for writing!\n");
+        return;
+    }
+
+    struct Student* current = head;
+    while (current) {
+        fwrite(current, sizeof(struct Student), 1, file);
+        current = current->next;
+    }
+
+    fclose(file);
+}
+
+void loadDataFromFile(struct Student** head, const char* filename) {
+    FILE* file = fopen(filename, "rb");
+    if (!file) {
+        printf("No existing data file found. Starting fresh.\n");
+        return;
+    }
+
+    struct Student temp;
+    struct Student* current = NULL;
+
+    while (fread(&temp, sizeof(struct Student), 1, file) == 1) {
+        struct Student* newStudent = (struct Student*)malloc(sizeof(struct Student));
+        if (!newStudent) {
+            printf("Memory allocation failed!\n");
+            fclose(file);
+            return;
+        }
+        *newStudent = temp;
+        newStudent->next = NULL;
+
+        if (!*head) {
+            *head = newStudent;
+            current = *head;
+        } else {
+            current->next = newStudent;
+            current = newStudent;
+        }
+    }
+
+    fclose(file);
+}
+
+void addNewData(struct Student** head, const char* filename) {
+    int id1, id2, id3;
+    char input[20];
+    int validInput = 0;
+
+    while (!validInput) {
+        printf("\nEnter Student ID (Example -> 242-15-XXX): ");
+        scanf("%19s", input);
+        clearInputBuffer();
+
+        if (sscanf(input, "%d-%d-%d", &id1, &id2, &id3) != 3) {
+            printf("%sInvalid format! Please use XXX-XX-XXX format where X are digits.%s\n",RED,RESET);
+            continue;
+        }
+
+        validInput = 1;
+    }
+
+    char searchID[20];
+    sprintf(searchID, "%03d-%02d-%03d", id1, id2, id3);
+    struct Student* existingStudent = searchStudentByFullID(*head, searchID);
+
+    if (existingStudent) {
+        printf("\n%sStudent with ID %s already exists!%s\n",YELLOW, searchID ,RESET);
+        printf("%s1.%s Edit existing student Marks\n",CYAN,RESET);
+        printf("%s2.%s Add new course to existing student\n",CYAN,RESET);
+        printf("%s3.%s Cancel\n",CYAN,RESET);
+        printf("\n%sEnter your choice:%s ",CYAN,RESET);
+
+        int choice;
+        scanf("%d", &choice);
+        clearInputBuffer();
+
+        switch (choice) {
+            case 1:
+                editStudent(*head, filename);
+                return;
+            case 2:
+                if (existingStudent->courseCount >= MAX_COURSES) {
+                    printf("Maximum number of courses reached for this student!\n");
+                    return;
+                }
+                addCourseToStudent(existingStudent);
+                saveDataToFile(*head, filename);
+                printf("\nNew course added to existing student successfully!\n");
+                return;
+            case 3:
+                printf("Operation canceled.\n");
+                return;
+            default:
+                printf(RED "Invalid choice." RESET "\n");
+                return;
+        }
+    }
+
+    struct Student* newStudent = (struct Student*)malloc(sizeof(struct Student));
+    if (!newStudent) {
+        printf("Memory allocation failed!\n");
+        return;
+    }
+
+    newStudent->id1 = id1;
+    newStudent->id2 = id2;
+    newStudent->id3 = id3;
+
+    printf("Enter Student Name: ");
+    fgets(newStudent->name, MAX_NAME_LENGTH, stdin);
+    newStudent->name[strcspn(newStudent->name, "\n")] = '\0';
+
+    newStudent->courseCount = 0;
+    newStudent->next = NULL;
+
+    printf("\nAdd course marks for the student? (y/n): ");
+    char addCourseChoice;
+    scanf("%c", &addCourseChoice);
+    clearInputBuffer();
+
+    if (tolower(addCourseChoice) == 'y') {
+        addCourseToStudent(newStudent);
+    }
+
+    if (!*head) {
+        *head = newStudent;
+    } else {
+        struct Student* current = *head;
+        while (current->next) {
+            current = current->next;
+        }
+        current->next = newStudent;
+    }
+
+    saveDataToFile(*head, filename);
+    printf("\nStudent data added successfully!\n");
+}
+
+void addCourseToStudent(struct Student* student) {
+    char addAnother;
+    do {
+        if (student->courseCount >= MAX_COURSES) {
+            printf("Maximum number of courses reached!\n");
+            return;
+        }
+
+        struct CourseMarks* newCourse = &student->courses[student->courseCount];
+        enterCourseMarks(newCourse);
+        student->courseCount++;
+
+        if (student->courseCount < MAX_COURSES) {
+            printf("\nDo you want to add another course? (Y/N): ");
+            scanf(" %c", &addAnother);
+            clearInputBuffer();
+        } else {
+            break;
+        }
+    } while (toupper(addAnother) == 'Y');
+}
+
+
+int main() {
+    struct Student* head = NULL;
+    char section[11];
+    char filename[50];
+
+
+    do {
+        printf("Enter Section To Access And Edit..(Example-> 67_H): ");
+        scanf("%10s", section);
+        clearInputBuffer();
+
+        if (!validateSectionName(section)) {
+            printf("Invalid section name! Use only letters, numbers, underscore(3-10 characters)-(Example-> 67_H) \n");
+        }
+    } while (!validateSectionName(section));
+
+
+    sprintf(filename, "student_data_%s.bin", section);
+    loadDataFromFile(&head, filename);
+
+    int choice;
+    while (1) {
+        displayMainMenu();
+        printf("\n%sEnter your choice:%s ",CYAN,RESET);
+        scanf("%d", &choice);
+        clearInputBuffer();
+
+        switch (choice) {
+            case 1: {
+                if (verifyTeacherPassword()) {
+                    int teacherChoice;
+                    while (1) {
+                        displayTeacherMenu();
+                        printf("\n%sEnter your choice:%s ",CYAN,RESET);
+                        scanf("%d", &teacherChoice);
+                        clearInputBuffer();
+
+                        switch (teacherChoice) {
+                            case 1:
+                                addNewData(&head, filename);
+                                break;
+                            case 2:
+                                viewAllData(head);
+                                break;
+                            case 3:
+                                viewIndividualData(head);
+                                break;
+                            case 4:
+                                editStudent(head, filename);
+                                break;
+                            case 5:
+                                deleteStudent(&head, filename);
+                                break;
+                            case 6:
+                                deleteCourse(head, filename);
+                                break;
+                            case 7:
+                                printf("\nLogging out from teacher panel...\n");
+                                goto main_menu;
+                            default:
+                                printf("\nInvalid choice! Try again.\n");
+                        }
+                    }
+                }
+                break;
+            }
+            case 2: {
+                int studentChoice;
+                while (1) {
+                    displayStudentMenu();
+                    printf("\n%sEnter your choice:%s ",CYAN,RESET);
+                    scanf("%d", &studentChoice);
+                    clearInputBuffer();
+
+                    switch (studentChoice) {
+                        case 1:
+                            viewIndividualData(head);
+                            break;
+                        case 2:
+                            goto main_menu;
+                        default:
+                            printf("Invalid choice! Try again.\n");
+                    }
+                }
+                break;
+            }
+            case 3:
+                printf("\nExiting program...\n");
+                freeStudentList(head);
+                return 0;
+            default:
+                printf("\nInvalid choice! Try again.\n");
+        }
+        main_menu: continue;
+    }
+    return 0;
+}
